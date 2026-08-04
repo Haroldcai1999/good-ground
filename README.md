@@ -14,11 +14,29 @@ python3 -m http.server 8901
 
 ## Deploying
 
-Copy the folder to any static host. Nothing in it is tied to a domain or a path.
+**Live at <https://good-ground.netlify.app>**
 
-- **Netlify** — drag the folder onto <https://app.netlify.com/drop>
-- **GitHub Pages** — push this repo, then Settings → Pages → Source: `main` / root
-- **Cloudflare Pages / Vercel** — connect the repo, no build command, output dir `.`
+Deploys are automatic. Push to `main` and the site updates:
+
+```bash
+git add -A && git commit -m "your message" && git push
+```
+
+Netlify watches this repo and republishes within about a minute. There is no
+build step — it copies the files as they are. Watch a deploy or roll one back at
+<https://app.netlify.com/projects/good-ground/deploys>.
+
+Opening a pull request gets you a preview URL on a temporary domain, so you can
+check a change before it reaches the live site.
+
+No cache-busting needed: Netlify serves `cache-control: max-age=0, must-revalidate`
+with ETags, so browsers pick up edits on the next request.
+
+To deploy by hand without a push (rarely needed):
+
+```bash
+npx netlify-cli deploy --prod --dir=.
+```
 
 ## Layout
 
