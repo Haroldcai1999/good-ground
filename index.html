@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GOOD GROUND — places to walk the dog</title>
+<meta name="description" content="A curated map of parks, grass and off-leash ground for dogs in the Bay Area and New York. 96 places, with the leash rules checked against each park authority.">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="GOOD GROUND">
+<meta property="og:description" content="Parks, grass and off-leash ground worth the walk. 96 places across the Bay Area and New York, with the leash rules checked against each park authority.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="GOOD GROUND">
+<meta name="twitter:description" content="Parks, grass and off-leash ground worth the walk. Bay Area and New York.">
+<meta name="theme-color" content="#111111">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23111'/%3E%3Ccircle cx='50' cy='50' r='26' fill='%235aa96f'/%3E%3C/svg%3E">
+
+<link rel="stylesheet" href="vendor/fonts.css">
+<link rel="stylesheet" href="vendor/leaflet.css">
+
+<style>
+:root{
+  --bg:#111111;
+  --fg:#ededea;
+  --dim:rgba(237,237,234,.52);
+  --faint:rgba(237,237,234,.30);
+  --line:rgba(237,237,234,.14);
+  --line-strong:rgba(237,237,234,.30);
+  --hover:rgba(237,237,234,.055);
+  --rail:440px;
+  --tiles:invert(0);
+}
+html[data-theme="light"]{
+  --bg:#ededea;
+  --fg:#111111;
+  --dim:rgba(17,17,17,.56);
+  --faint:rgba(17,17,17,.34);
+  --line:rgba(17,17,17,.16);
+  --line-strong:rgba(17,17,17,.34);
+  --hover:rgba(17,17,17,.05);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:"Space Mono","JetBrains Mono",Menlo,"Courier New",monospace;
+  font-size:13px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+a{color:inherit}
+
+.app{display:flex;height:100dvh;width:100%}
+
+/* ---------------------------------------------------------------- rail */
+.rail{
+  width:var(--rail);
+  flex:0 0 var(--rail);
+  height:100%;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  border-right:1px solid var(--line);
+  scrollbar-width:thin;
+  scrollbar-color:var(--line-strong) transparent;
+}
+.rail::-webkit-scrollbar{width:8px}
+.rail::-webkit-scrollbar-thumb{background:var(--line-strong)}
+.rail::-webkit-scrollbar-track{background:transparent}
+
+.block{padding:22px 24px;border-bottom:1px solid var(--line)}
+
+.meta{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:11px;letter-spacing:.10em;color:var(--dim);
+}
+.meta b{font-weight:400}
+
+.theme{display:flex;border:1px solid var(--line-strong)}
+.theme button{
+  font:inherit;font-size:10px;letter-spacing:.12em;
+  background:none;border:0;color:var(--dim);
+  padding:5px 9px;cursor:pointer;
+}
+.theme button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+
+h1{
+  font-size:46px;line-height:1.02;letter-spacing:.02em;
+  font-weight:700;margin:26px 0 0;text-transform:uppercase;
+}
+.ver{font-size:11px;color:var(--faint);letter-spacing:.08em;float:right;margin-top:20px}
+.tagline{margin:20px 0 0;color:var(--dim);font-size:12.5px;max-width:34ch}
+
+.head{
+  display:flex;align-items:baseline;justify-content:space-between;
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:14px;
+}
+.head span{color:var(--faint)}
+
+/* lists */
+.list-row{
+  display:flex;align-items:center;gap:14px;width:100%;
+  font:inherit;text-align:left;cursor:pointer;
+  background:none;border:1px solid transparent;
+  padding:13px 15px;color:inherit;
+}
+.list-row:hover{background:var(--hover)}
+.list-row[aria-current="true"]{border-color:var(--fg)}
+.list-row .bullet{
+  width:11px;height:11px;border-radius:50%;
+  border:1.5px solid var(--line-strong);flex:0 0 auto;
+}
+.list-row[aria-current="true"] .bullet{border-color:#e8743b;background:#e8743b;box-shadow:inset 0 0 0 2.5px var(--bg)}
+.list-row .nm{flex:1;text-transform:uppercase;letter-spacing:.10em;font-size:12.5px}
+.list-row .ct{color:var(--dim);font-size:12px}
+
+/* filters */
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;
+  font:inherit;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  border:1px solid var(--line-strong);background:none;color:inherit;
+  padding:6px 9px;cursor:pointer;
+}
+.chip:hover{background:var(--hover)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.chip .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.chip .n{color:var(--faint);font-size:10px}
+.chip[aria-pressed="true"] .n{color:var(--bg);opacity:.6}
+
+.search{
+  width:100%;font:inherit;font-size:12.5px;
+  background:none;color:inherit;
+  border:1px solid var(--line-strong);
+  padding:12px 14px;
+}
+.search::placeholder{color:var(--faint)}
+.search:focus{outline:none;border-color:var(--fg)}
+
+/* cards */
+.card{
+  padding:20px 24px;border-bottom:1px solid var(--line);
+  cursor:pointer;position:relative;
+}
+.card:hover{background:var(--hover)}
+.card[aria-selected="true"]{background:var(--hover)}
+.card[aria-selected="true"]::before{
+  content:"";position:absolute;left:0;top:-1px;bottom:-1px;width:3px;background:var(--fg);
+}
+.card h3{font-size:14px;font-weight:700;margin:0;letter-spacing:.01em}
+.card .hood{font-size:11px;color:var(--faint);letter-spacing:.10em;text-transform:uppercase;margin-top:5px}
+.card .note{margin:9px 0 0;color:var(--dim);font-size:12.5px}
+
+.hl{
+  display:flex;gap:9px;margin-top:11px;
+  border-left:2px solid var(--line-strong);padding:2px 0 2px 10px;
+  font-size:12px;color:var(--fg);
+}
+.hl::before{content:"★";color:var(--faint);font-size:10px;line-height:1.5}
+
+.card .foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
+.tags{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim);
+}
+.tag .dot{width:7px;height:7px;border-radius:50%}
+.tag.leash{border:1px solid var(--line);padding:3px 7px;color:var(--fg)}
+.stars{letter-spacing:.12em;font-size:10px;color:var(--fg)}
+.stars i{font-style:normal;color:var(--faint)}
+
+.links{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.maps{
+  font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--dim);text-decoration:none;border-bottom:1px solid var(--line-strong);
+  padding-bottom:2px;white-space:nowrap;
+}
+.maps:hover{color:var(--fg);border-color:var(--fg)}
+.maps.noline{border-bottom-style:dotted;color:var(--faint);cursor:help}
+.maps.noline:hover{color:var(--faint);border-color:var(--line-strong)}
+.dms{margin-top:11px;font-size:10.5px;letter-spacing:.06em;color:var(--faint)}
+
+.legend{
+  padding:16px 24px;border-bottom:1px solid var(--line);
+  font-size:10.5px;letter-spacing:.06em;color:var(--faint);line-height:1.9;
+}
+.legend b{color:var(--dim);font-weight:400}
+.legend .s{color:var(--dim);letter-spacing:.12em}
+
+.empty{padding:40px 24px;color:var(--faint);font-size:12.5px}
+.foot-note{padding:22px 24px 60px;color:var(--faint);font-size:11px;line-height:1.7}
+.foot-note a{color:var(--dim)}
+
+/* ----------------------------------------------------------------- map */
+.map-wrap{flex:1;position:relative;min-width:0}
+#map{position:absolute;inset:0;background:var(--bg)}
+.leaflet-container{background:var(--bg);font-family:inherit}
+.leaflet-tile-pane{filter:var(--tiles)}
+
+.readout{
+  position:absolute;left:16px;bottom:16px;z-index:500;
+  background:var(--bg);border:1px solid var(--line-strong);
+  padding:7px 12px;font-size:11px;letter-spacing:.08em;color:var(--dim);
+  pointer-events:none;white-space:nowrap;
+}
+.mobile-toggle{display:none}
+
+.leaflet-control-zoom{border:1px solid var(--line-strong)!important;box-shadow:none!important}
+.leaflet-control-zoom a{
+  background:var(--bg)!important;color:var(--fg)!important;
+  border-color:var(--line)!important;font-weight:400!important;
+}
+.leaflet-control-zoom a:hover{background:var(--hover)!important}
+.leaflet-control-attribution{
+  background:var(--bg)!important;color:var(--faint)!important;
+  font-family:inherit!important;font-size:10px!important;
+}
+.leaflet-control-attribution a{color:var(--dim)!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{
+  background:var(--bg);color:var(--fg);border-radius:0;
+  box-shadow:none;border:1px solid var(--line-strong);
+}
+.leaflet-popup-content{margin:12px 14px;font-family:inherit;font-size:12px;line-height:1.5}
+.leaflet-popup-content b{display:block;font-size:13px;margin-bottom:4px}
+.leaflet-popup-content .p-hood{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.leaflet-popup-close-button{color:var(--dim)!important}
+.leaflet-container a.leaflet-popup-close-button:hover{color:var(--fg)!important}
+
+/* -------------------------------------------------------------- mobile */
+@media (max-width:900px){
+  body{overflow:auto}
+  .app{flex-direction:column;height:auto;min-height:100dvh}
+  .rail{width:100%;flex:none;height:auto;overflow:visible;border-right:0;order:2}
+  .map-wrap{order:1;position:sticky;top:0;height:52dvh;flex:none;z-index:10;border-bottom:1px solid var(--line)}
+  h1{font-size:38px}
+  .block,.card{padding-left:18px;padding-right:18px}
+  .foot-note{padding-left:18px;padding-right:18px}
+  .mobile-toggle{
+    display:block;position:absolute;right:16px;bottom:16px;z-index:500;
+    font:inherit;font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+    background:var(--bg);color:var(--fg);border:1px solid var(--line-strong);
+    padding:8px 12px;cursor:pointer;
+  }
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <aside class="rail">
+    <div class="block">
+      <div class="meta">
+        <b id="stamp">GG_0000_0000</b>
+        <div class="theme">
+          <button id="t-light" aria-pressed="false">LIGHT</button>
+          <button id="t-dark"  aria-pressed="true">DARK</button>
+        </div>
+      </div>
+      <span class="ver">v1.0.0</span>
+      <h1>Good<br>Ground</h1>
+      <p class="tagline">Parks, grass and off-leash ground worth the walk. Bay Area and New York.</p>
+    </div>
+
+    <div class="block">
+      <div class="head">Lists <span id="list-idx">01/02</span></div>
+      <div id="lists"></div>
+    </div>
+
+    <div class="block">
+      <div class="head">Places <span id="place-count">0</span></div>
+      <div class="chips" id="chips"></div>
+      <input class="search" id="search" placeholder="Filter" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="legend">
+      <b>How much room:</b><br>
+      <span class="s">★★★</span> Off-leash &mdash; open ground, voice control<br>
+      <span class="s">★★<i style="opacity:.35">★</i></span> Off-leash bounded &mdash; a designated zone, or posted hours<br>
+      <span class="s">★<i style="opacity:.35">★★</i></span> Leashed
+    </div>
+
+    <div id="cards"></div>
+
+    <p class="foot-note">
+      Coordinates from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>.
+      Every card links to the rule page of the authority that governs it &mdash; NYC Parks, SF Rec &amp; Park,
+      East Bay Regional Parks, the National Park Service. Rules change with the season, the hour and the
+      posted sign, so check <em>Rules&nbsp;&#8599;</em> before you unclip.
+    </p>
+  </aside>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="readout" id="readout">00.0000 / 000.0000 · Z00</div>
+    <button class="mobile-toggle" id="mobile-toggle">Fit all</button>
+  </div>
+
+</div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="places.js?v=3"></script>
+<script>
+(function () {
+  'use strict';
+
+  function leashLabel(p) {
+    var l = window.LEASH[p.leash];
+    return l ? l.label : p.leash;
+  }
+
+  // Freedom rating, derived from the rule — never authored per place.
+  //   3  off-leash on open ground      2  off-leash bounded by area or hours
+  //   1  leashed
+  function starCount(p) {
+    var l = window.LEASH[p.leash];
+    return l ? l.stars : 1;
+  }
+
+  function stars(p) {
+    var n = starCount(p);
+    return '<span class="stars">' +
+      '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i></span>';
+  }
+
+  var state = {
+    list: 'bay',
+    cat: 'all',
+    q: '',
+    selected: null,
+  };
+
+  /* ------------------------------------------------------------ helpers */
+
+  function dms(lat, lon) {
+    function part(v, pos, neg) {
+      var hemi = v >= 0 ? pos : neg;
+      v = Math.abs(v);
+      var d = Math.floor(v);
+      var mF = (v - d) * 60;
+      var m = Math.floor(mF);
+      var s = ((mF - m) * 60).toFixed(1);
+      return d + '°' + String(m).padStart(2, '0') + "'" + String(s).padStart(4, '0') + '"' + hemi;
+    }
+    return part(lat, 'N', 'S') + ' ' + part(lon, 'E', 'W');
+  }
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function inList(p) { return p.list === state.list; }
+
+  function matches(p) {
+    if (!inList(p)) return false;
+    if (state.cat !== 'all' && p.cat !== state.cat) return false;
+    if (state.q) {
+      var hay = (p.name + ' ' + p.hood + ' ' + p.note + ' ' +
+                 (p.highlight || '') + ' ' + leashLabel(p)).toLowerCase();
+      if (hay.indexOf(state.q) === -1) return false;
+    }
+    return true;
+  }
+
+  function visible() { return window.PLACES.filter(matches); }
+
+  /* ---------------------------------------------------------------- map */
+
+  var map = L.map('map', { zoomControl: true, attributionControl: true })
+    .setView([37.7749, -122.3], 10);
+
+  var TILES = {
+    dark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  };
+  var tileLayer = L.tileLayer(TILES.dark, {
+    maxZoom: 19,
+    subdomains: 'abcd',
+    attribution: '&copy; OpenStreetMap &middot; &copy; CARTO',
+  }).addTo(map);
+
+  var markers = {};   // place index -> circleMarker
+  var layer = L.layerGroup().addTo(map);
+
+  function markerFor(p, i) {
+    var m = L.circleMarker([p.lat, p.lon], {
+      radius: 7,
+      weight: 2,
+      color: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+      fillColor: window.CATS[p.cat].color,
+      fillOpacity: 1,
+    });
+    m.bindPopup(
+      '<b>' + esc(p.name) + '</b>' +
+      '<span class="p-hood">' + esc(p.hood) + ' &middot; ' +
+        esc(leashLabel(p)) + ' ' + stars(p) + '</span>'
+    );
+    m.on('click', function () { select(i, false); });
+    return m;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function drawMarkers() {
+    layer.clearLayers();
+    markers = {};
+    var pts = [];
+    window.PLACES.forEach(function (p, i) {
+      if (!matches(p)) return;
+      var m = markerFor(p, i);
+      markers[i] = m;
+      layer.addLayer(m);
+      pts.push([p.lat, p.lon]);
+    });
+    return pts;
+  }
+
+  function fitAll() {
+    var pts = window.PLACES.filter(matches).map(function (p) { return [p.lat, p.lon]; });
+    if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 14 });
+  }
+
+  /* -------------------------------------------------------------- render */
+
+  function renderLists() {
+    var host = document.getElementById('lists');
+    host.innerHTML = '';
+    window.LISTS.forEach(function (l, i) {
+      var n = window.PLACES.filter(function (p) { return p.list === l.id; }).length;
+      var b = document.createElement('button');
+      b.className = 'list-row';
+      b.setAttribute('aria-current', String(l.id === state.list));
+      b.innerHTML = '<span class="bullet"></span>' +
+                    '<span class="nm">' + esc(l.name) + '</span>' +
+                    '<span class="ct">' + pad2(n) + '</span>';
+      b.addEventListener('click', function () { setList(l.id); });
+      host.appendChild(b);
+
+      if (l.id === state.list) {
+        document.getElementById('list-idx').textContent = pad2(i + 1) + '/' + pad2(window.LISTS.length);
+      }
+    });
+  }
+
+  function renderChips() {
+    var host = document.getElementById('chips');
+    host.innerHTML = '';
+    var pool = window.PLACES.filter(inList);
+
+    function chip(key, label, color, n) {
+      var b = document.createElement('button');
+      b.className = 'chip';
+      b.setAttribute('aria-pressed', String(state.cat === key));
+      b.innerHTML = (color ? '<span class="dot" style="background:' + color + '"></span>' : '') +
+                    esc(label) + '<span class="n">' + pad2(n) + '</span>';
+      b.addEventListener('click', function () {
+        state.cat = state.cat === key ? 'all' : key;
+        if (key === 'all') state.cat = 'all';
+        render();
+      });
+      host.appendChild(b);
+    }
+
+    chip('all', 'All', null, pool.length);
+    Object.keys(window.CATS).forEach(function (k) {
+      var n = pool.filter(function (p) { return p.cat === k; }).length;
+      if (n) chip(k, window.CATS[k].label, window.CATS[k].color, n);
+    });
+  }
+
+  function renderCards() {
+    var host = document.getElementById('cards');
+    host.innerHTML = '';
+    var shown = 0;
+
+    window.PLACES.forEach(function (p, i) {
+      if (!matches(p)) return;
+      shown++;
+
+      var el = document.createElement('article');
+      el.className = 'card';
+      el.dataset.i = i;
+      el.setAttribute('aria-selected', String(state.selected === i));
+
+      var q = encodeURIComponent(p.name + ', ' + p.hood);
+      var src = window.SOURCES[p.src] || {};
+      el.innerHTML =
+        '<h3>' + esc(p.name) + '</h3>' +
+        '<div class="hood">' + esc(p.hood) + '</div>' +
+        '<p class="note">' + esc(p.note) + '</p>' +
+        (p.highlight ? '<div class="hl">' + esc(p.highlight) + '</div>' : '') +
+        '<div class="foot">' +
+          '<div class="tags">' +
+            '<span class="tag"><span class="dot" style="background:' + window.CATS[p.cat].color + '"></span>' +
+              esc(window.CATS[p.cat].label) + '</span>' +
+            '<span class="tag leash">' + esc(leashLabel(p)) + ' ' + stars(p) + '</span>' +
+          '</div>' +
+          '<div class="links">' +
+            // prefer the park's own rule page; fall back to the authority's
+            (p.url || src.url
+              ? '<a class="maps" target="_blank" rel="noopener" href="' + esc(p.url || src.url) +
+                '" title="Dog rules &mdash; ' + esc(src.name) + '">Rules &#8599;</a>'
+              : '<span class="maps noline" title="No online rule page — read the posted signs">' +
+                esc(src.name) + '</span>') +
+            '<a class="maps" target="_blank" rel="noopener" ' +
+               'href="https://www.google.com/maps/search/?api=1&query=' + q + '">Maps &#8599;</a>' +
+          '</div>' +
+        '</div>' +
+        '<div class="dms">' + dms(p.lat, p.lon) + '</div>';
+
+      el.addEventListener('click', function (ev) {
+        if (ev.target.closest('a')) return;
+        select(i, true);
+      });
+      host.appendChild(el);
+    });
+
+    if (!shown) {
+      host.innerHTML = '<p class="empty">Nothing here. Try a different filter.</p>';
+    }
+    document.getElementById('place-count').textContent = pad2(shown);
+  }
+
+  function render() {
+    renderLists();
+    renderChips();
+    renderCards();
+    drawMarkers();
+  }
+
+  /* -------------------------------------------------------------- events */
+
+  function select(i, fly) {
+    state.selected = i;
+    var p = window.PLACES[i];
+
+    document.querySelectorAll('.card').forEach(function (c) {
+      c.setAttribute('aria-selected', String(Number(c.dataset.i) === i));
+    });
+
+    if (fly) {
+      map.flyTo([p.lat, p.lon], Math.max(map.getZoom(), 15), { duration: 0.6 });
+    } else {
+      var card = document.querySelector('.card[data-i="' + i + '"]');
+      if (card) {
+        var rail = document.querySelector('.rail');
+        if (window.matchMedia('(max-width:900px)').matches) {
+          // the map is sticky at the top on mobile — clear it
+          var pad = document.querySelector('.map-wrap').offsetHeight + 16;
+          window.scrollTo({
+            top: card.getBoundingClientRect().top + window.scrollY - pad,
+            behavior: 'smooth',
+          });
+        } else {
+          rail.scrollTo({ top: card.offsetTop - 20, behavior: 'smooth' });
+        }
+      }
+    }
+    if (markers[i]) markers[i].openPopup();
+  }
+
+  function setList(id) {
+    if (state.list === id) return;
+    state.list = id;
+    state.cat = 'all';
+    state.selected = null;
+    document.getElementById('search').value = '';
+    state.q = '';
+    render();
+    var l = window.LISTS.find(function (x) { return x.id === id; });
+    map.flyTo(l.center, l.zoom, { duration: 0.7 });
+    history.replaceState(null, '', '?list=' + id);
+    document.querySelector('.rail').scrollTo({ top: 0 });
+  }
+
+  document.getElementById('search').addEventListener('input', function (e) {
+    state.q = e.target.value.trim().toLowerCase();
+    state.selected = null;
+    renderCards();
+    drawMarkers();
+  });
+
+  document.getElementById('mobile-toggle').addEventListener('click', fitAll);
+
+  /* --------------------------------------------------------------- theme */
+
+  function setTheme(t) {
+    document.documentElement.dataset.theme = t;
+    document.getElementById('t-dark').setAttribute('aria-pressed', String(t === 'dark'));
+    document.getElementById('t-light').setAttribute('aria-pressed', String(t === 'light'));
+    tileLayer.setUrl(TILES[t]);
+    try { localStorage.setItem('gg-theme', t); } catch (e) {}
+    drawMarkers();
+  }
+  document.getElementById('t-dark').addEventListener('click', function () { setTheme('dark'); });
+  document.getElementById('t-light').addEventListener('click', function () { setTheme('light'); });
+
+  /* ------------------------------------------------------------- readout */
+
+  var readout = document.getElementById('readout');
+  function paintReadout(ll) {
+    var c = ll || map.getCenter();
+    readout.textContent =
+      c.lat.toFixed(4) + ' / ' + c.lng.toFixed(4) + ' · Z' + map.getZoom().toFixed(1);
+  }
+  map.on('mousemove', function (e) { paintReadout(e.latlng); });
+  map.on('move zoom', function () { paintReadout(null); });
+
+  /* ---------------------------------------------------------------- boot */
+
+  var stamp = new Date();
+  document.getElementById('stamp').textContent =
+    'GG_' + pad2(stamp.getMonth() + 1) + pad2(stamp.getDate()) + '_' +
+    String(stamp.getFullYear()).slice(2) + pad2(stamp.getHours());
+
+  var urlList = new URLSearchParams(location.search).get('list');
+  if (window.LISTS.some(function (l) { return l.id === urlList; })) state.list = urlList;
+
+  var saved = null;
+  try { saved = localStorage.getItem('gg-theme'); } catch (e) {}
+  if (saved === 'light' || saved === 'dark') setTheme(saved);
+
+  render();
+  var start = window.LISTS.find(function (l) { return l.id === state.list; });
+  map.setView(start.center, start.zoom);
+  paintReadout(null);
+
+  window.addEventListener('resize', function () { map.invalidateSize(); });
+})();
+</script>
+</body>
+</html>
