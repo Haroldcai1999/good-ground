@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>GOOD GROUND — places to walk the dog</title>
-<meta name="description" content="A curated map of parks, grass and off-leash ground for dogs in the Bay Area and New York. 96 places, with the leash rules checked against each park authority.">
+<title>GOOD GROUND — places to walk the dog and the cat</title>
+<meta name="description" content="A curated map of ground worth walking your dog or your cat on — 120 places across the Bay Area and New York, with the rules checked against each park authority.">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="GOOD GROUND">
-<meta property="og:description" content="Parks, grass and off-leash ground worth the walk. 96 places across the Bay Area and New York, with the leash rules checked against each park authority.">
+<meta property="og:description" content="Ground worth walking your dog — or your cat — on. 120 places across the Bay Area and New York, with the rules checked against each park authority.">
 <meta property="og:url" content="https://good-ground.netlify.app/">
 <meta property="og:image" content="https://good-ground.netlify.app/preview.png">
 <meta property="og:image:width" content="1200">
@@ -93,6 +93,22 @@ a{color:inherit}
   padding:5px 9px;cursor:pointer;
 }
 .theme button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+
+.species{display:flex;border:1px solid var(--line-strong)}
+.species button{
+  flex:1;font:inherit;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  background:none;border:0;color:var(--dim);padding:12px 0;cursor:pointer;
+}
+.species button+button{border-left:1px solid var(--line-strong)}
+.species button:hover{background:var(--hover);color:var(--fg)}
+.species button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+
+.warn{
+  display:flex;gap:9px;margin-top:9px;
+  border-left:2px solid #c8a24a;padding:2px 0 2px 10px;
+  font-size:11.5px;color:var(--dim);
+}
+.warn::before{content:"!";color:#c8a24a;font-weight:700;font-size:11px;line-height:1.5}
 
 h1{
   font-size:46px;line-height:1.02;letter-spacing:.02em;
@@ -268,9 +284,17 @@ h1{
           <button id="t-dark"  aria-pressed="true">DARK</button>
         </div>
       </div>
-      <span class="ver">v1.0.0</span>
+      <span class="ver">v1.1.0</span>
       <h1>Good<br>Ground</h1>
-      <p class="tagline">Parks, grass and off-leash ground worth the walk. Bay Area and New York.</p>
+      <p class="tagline" id="tagline"></p>
+    </div>
+
+    <div class="block">
+      <div class="head">Animal</div>
+      <div class="species" id="species">
+        <button data-sp="dog" aria-pressed="true">Dogs</button>
+        <button data-sp="cat" aria-pressed="false">Cats</button>
+      </div>
     </div>
 
     <div class="block">
@@ -284,12 +308,7 @@ h1{
       <input class="search" id="search" placeholder="Filter" autocomplete="off" spellcheck="false">
     </div>
 
-    <div class="legend">
-      <b>How much room:</b><br>
-      <span class="s">★★★</span> Off-leash &mdash; open ground, voice control<br>
-      <span class="s">★★<i style="opacity:.35">★</i></span> Off-leash bounded &mdash; a designated zone, or posted hours<br>
-      <span class="s">★<i style="opacity:.35">★★</i></span> Leashed
-    </div>
+    <div class="legend" id="legend"></div>
 
     <div id="cards"></div>
 
@@ -310,22 +329,50 @@ h1{
 </div>
 
 <script src="vendor/leaflet.js"></script>
-<script src="places.js?v=3"></script>
+<script src="places.js?v=4"></script>
 <script>
 (function () {
   'use strict';
 
-  function leashLabel(p) {
-    var l = window.LEASH[p.leash];
-    return l ? l.label : p.leash;
+  // Dogs are rated on freedom (how much off-leash room the rule allows).
+  // Cats are always harnessed, so they're rated on containment (how hard it
+  // would be to bolt). Both derived from the data — never authored per place.
+  function scale(p) {
+    return p.species === 'cat'
+      ? window.CONTAIN[p.contain]
+      : window.LEASH[p.leash];
   }
 
-  // Freedom rating, derived from the rule — never authored per place.
-  //   3  off-leash on open ground      2  off-leash bounded by area or hours
-  //   1  leashed
+  function leashLabel(p) {
+    var s = scale(p);
+    return s ? s.label : (p.contain || p.leash);
+  }
+
   function starCount(p) {
-    var l = window.LEASH[p.leash];
-    return l ? l.stars : 1;
+    var s = scale(p);
+    return s ? s.stars : 1;
+  }
+
+  // Loose-dog proximity. The dog list is a verified index of where dogs run
+  // off-leash, which makes it an inverse index for cats. Distance to the
+  // nearest one is computed, not authored.
+  var LOOSE = { off: 1, hours: 1 };
+  function nearestLooseDog(p) {
+    var best = null, bestKm = Infinity;
+    window.PLACES.forEach(function (d) {
+      if (d.species !== 'dog' || d.list !== p.list || !LOOSE[d.leash]) return;
+      var km = haversine(p.lat, p.lon, d.lat, d.lon);
+      if (km < bestKm) { bestKm = km; best = d; }
+    });
+    return best ? { place: best, km: bestKm } : null;
+  }
+
+  function haversine(la1, lo1, la2, lo2) {
+    var R = 6371, r = Math.PI / 180;
+    var dLa = (la2 - la1) * r, dLo = (lo2 - lo1) * r;
+    var a = Math.sin(dLa / 2) * Math.sin(dLa / 2) +
+            Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2);
+    return 2 * R * Math.asin(Math.sqrt(a));
   }
 
   function stars(p) {
@@ -335,8 +382,9 @@ h1{
   }
 
   var state = {
+    species: 'dog',
     list: 'bay',
-    cat: 'all',
+    kind: 'all',   // category filter
     q: '',
     selected: null,
   };
@@ -358,11 +406,11 @@ h1{
 
   function pad2(n) { return String(n).padStart(2, '0'); }
 
-  function inList(p) { return p.list === state.list; }
+  function inList(p) { return p.list === state.list && p.species === state.species; }
 
   function matches(p) {
     if (!inList(p)) return false;
-    if (state.cat !== 'all' && p.cat !== state.cat) return false;
+    if (state.kind !== 'all' && p.kind !== state.kind) return false;
     if (state.q) {
       var hay = (p.name + ' ' + p.hood + ' ' + p.note + ' ' +
                  (p.highlight || '') + ' ' + leashLabel(p)).toLowerCase();
@@ -396,7 +444,7 @@ h1{
       radius: 7,
       weight: 2,
       color: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
-      fillColor: window.CATS[p.cat].color,
+      fillColor: window.KINDS[p.kind].color,
       fillOpacity: 1,
     });
     m.bindPopup(
@@ -428,9 +476,24 @@ h1{
     return pts;
   }
 
+  // Leaflet's animation maths yields NaN on a zero-size container (hidden tab,
+  // pre-layout). Guard every camera move so a dead map can't throw into callers.
+  function mapReady() {
+    var s = map.getSize();
+    return s && s.x > 0 && s.y > 0;
+  }
+
+  function flyTo(center, zoom, opts) {
+    if (!mapReady()) { map.setView(center, zoom, { animate: false }); return; }
+    try { map.flyTo(center, zoom, opts); }
+    catch (e) { map.setView(center, zoom, { animate: false }); }
+  }
+
   function fitAll() {
     var pts = window.PLACES.filter(matches).map(function (p) { return [p.lat, p.lon]; });
-    if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 14 });
+    if (!pts.length || !mapReady()) return;
+    try { map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 14 }); }
+    catch (e) { /* zero-size map — nothing sensible to fit to */ }
   }
 
   /* -------------------------------------------------------------- render */
@@ -439,7 +502,7 @@ h1{
     var host = document.getElementById('lists');
     host.innerHTML = '';
     window.LISTS.forEach(function (l, i) {
-      var n = window.PLACES.filter(function (p) { return p.list === l.id; }).length;
+      var n = window.PLACES.filter(function (p) { return p.list === l.id && p.species === state.species; }).length;
       var b = document.createElement('button');
       b.className = 'list-row';
       b.setAttribute('aria-current', String(l.id === state.list));
@@ -463,21 +526,21 @@ h1{
     function chip(key, label, color, n) {
       var b = document.createElement('button');
       b.className = 'chip';
-      b.setAttribute('aria-pressed', String(state.cat === key));
+      b.setAttribute('aria-pressed', String(state.kind === key));
       b.innerHTML = (color ? '<span class="dot" style="background:' + color + '"></span>' : '') +
                     esc(label) + '<span class="n">' + pad2(n) + '</span>';
       b.addEventListener('click', function () {
-        state.cat = state.cat === key ? 'all' : key;
-        if (key === 'all') state.cat = 'all';
+        state.kind = state.kind === key ? 'all' : key;
+        if (key === 'all') state.kind = 'all';
         render();
       });
       host.appendChild(b);
     }
 
     chip('all', 'All', null, pool.length);
-    Object.keys(window.CATS).forEach(function (k) {
-      var n = pool.filter(function (p) { return p.cat === k; }).length;
-      if (n) chip(k, window.CATS[k].label, window.CATS[k].color, n);
+    Object.keys(window.KINDS).forEach(function (k) {
+      var n = pool.filter(function (p) { return p.kind === k; }).length;
+      if (n) chip(k, window.KINDS[k].label, window.KINDS[k].color, n);
     });
   }
 
@@ -502,10 +565,11 @@ h1{
         '<div class="hood">' + esc(p.hood) + '</div>' +
         '<p class="note">' + esc(p.note) + '</p>' +
         (p.highlight ? '<div class="hl">' + esc(p.highlight) + '</div>' : '') +
+        looseDogHtml(p) +
         '<div class="foot">' +
           '<div class="tags">' +
-            '<span class="tag"><span class="dot" style="background:' + window.CATS[p.cat].color + '"></span>' +
-              esc(window.CATS[p.cat].label) + '</span>' +
+            '<span class="tag"><span class="dot" style="background:' + window.KINDS[p.kind].color + '"></span>' +
+              esc(window.KINDS[p.kind].label) + '</span>' +
             '<span class="tag leash">' + esc(leashLabel(p)) + ' ' + stars(p) + '</span>' +
           '</div>' +
           '<div class="links">' +
@@ -534,7 +598,40 @@ h1{
     document.getElementById('place-count').textContent = pad2(shown);
   }
 
+  var COPY = {
+    dog: {
+      tagline: 'Parks, grass and off-leash ground worth the walk. Bay Area and New York.',
+      legend: '<b>How much room:</b><br>' +
+        '<span class="s">\u2605\u2605\u2605</span> Off-leash \u2014 open ground, voice control<br>' +
+        '<span class="s">\u2605\u2605<i style="opacity:.35">\u2605</i></span> Off-leash bounded \u2014 a designated zone, or posted hours<br>' +
+        '<span class="s">\u2605<i style="opacity:.35">\u2605\u2605</i></span> Leashed',
+    },
+    cat: {
+      tagline: 'Enclosed, quiet ground for a harnessed cat. No such thing as a cat park \u2014 these are rated on how hard it would be to bolt.',
+      legend: '<b>How contained:</b><br>' +
+        '<span class="s">\u2605\u2605\u2605</span> Enclosed \u2014 walls or fence all round, one way out<br>' +
+        '<span class="s">\u2605\u2605<i style="opacity:.35">\u2605</i></span> Part-enclosed \u2014 bounded, but with gaps<br>' +
+        '<span class="s">\u2605<i style="opacity:.35">\u2605\u2605</i></span> Open ground \u2014 settled cats only',
+    },
+  };
+
+  function renderCopy() {
+    var c = COPY[state.species];
+    document.getElementById('tagline').textContent = c.tagline;
+    document.getElementById('legend').innerHTML = c.legend;
+  }
+
+  // Only shown for cats: how close the nearest verified off-leash dog ground is.
+  function looseDogHtml(p) {
+    if (p.species !== 'cat') return '';
+    var n = nearestLooseDog(p);
+    if (!n || n.km > 1.2) return '';
+    var m = n.km < 1 ? Math.round(n.km * 1000) + 'm' : n.km.toFixed(1) + 'km';
+    return '<div class="warn">Loose dogs ' + m + ' away at ' + esc(n.place.name) + '.</div>';
+  }
+
   function render() {
+    renderCopy();
     renderLists();
     renderChips();
     renderCards();
@@ -552,7 +649,7 @@ h1{
     });
 
     if (fly) {
-      map.flyTo([p.lat, p.lon], Math.max(map.getZoom(), 15), { duration: 0.6 });
+      flyTo([p.lat, p.lon], Math.max(map.getZoom(), 15), { duration: 0.6 });
     } else {
       var card = document.querySelector('.card[data-i="' + i + '"]');
       if (card) {
@@ -575,14 +672,14 @@ h1{
   function setList(id) {
     if (state.list === id) return;
     state.list = id;
-    state.cat = 'all';
+    state.kind = 'all';
     state.selected = null;
     document.getElementById('search').value = '';
     state.q = '';
     render();
+    syncUrl();
     var l = window.LISTS.find(function (x) { return x.id === id; });
-    map.flyTo(l.center, l.zoom, { duration: 0.7 });
-    history.replaceState(null, '', '?list=' + id);
+    flyTo(l.center, l.zoom, { duration: 0.7 });
     document.querySelector('.rail').scrollTo({ top: 0 });
   }
 
@@ -594,6 +691,30 @@ h1{
   });
 
   document.getElementById('mobile-toggle').addEventListener('click', fitAll);
+
+  document.querySelectorAll('#species button').forEach(function (b) {
+    b.addEventListener('click', function () { setSpecies(b.dataset.sp); });
+  });
+
+  function setSpecies(sp) {
+    if (state.species === sp) return;
+    state.species = sp;
+    state.kind = 'all';
+    state.selected = null;
+    document.getElementById('search').value = '';
+    state.q = '';
+    document.querySelectorAll('#species button').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.sp === sp));
+    });
+    render();
+    syncUrl();
+    fitAll();
+    document.querySelector('.rail').scrollTo({ top: 0 });
+  }
+
+  function syncUrl() {
+    history.replaceState(null, '', '?species=' + state.species + '&list=' + state.list);
+  }
 
   /* --------------------------------------------------------------- theme */
 
@@ -626,8 +747,14 @@ h1{
     'GG_' + pad2(stamp.getMonth() + 1) + pad2(stamp.getDate()) + '_' +
     String(stamp.getFullYear()).slice(2) + pad2(stamp.getHours());
 
-  var urlList = new URLSearchParams(location.search).get('list');
+  var params = new URLSearchParams(location.search);
+  var urlList = params.get('list');
   if (window.LISTS.some(function (l) { return l.id === urlList; })) state.list = urlList;
+  var urlSp = params.get('species');
+  if (urlSp === 'cat' || urlSp === 'dog') state.species = urlSp;
+  document.querySelectorAll('#species button').forEach(function (b) {
+    b.setAttribute('aria-pressed', String(b.dataset.sp === state.species));
+  });
 
   var saved = null;
   try { saved = localStorage.getItem('gg-theme'); } catch (e) {}

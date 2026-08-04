@@ -1,7 +1,7 @@
 # GOOD GROUND
 
-A curated map of parks, grass and off-leash ground for dogs — 96 places across
-the Bay Area and New York.
+A curated map of ground worth walking an animal on — 120 places across the Bay
+Area and New York. 96 for dogs, 24 for harness-trained cats.
 
 ## Running it
 
@@ -59,13 +59,26 @@ so each card links to the rule page behind it.
 
 | field | meaning |
 | --- | --- |
-| `cat` | `run` · `grass` · `trail` · `beach` |
-| `leash` | `off` open ground · `area` designated zone · `hours` posted hours · `on` leashed |
+| `species` | `dog` or `cat` |
+| `kind` | dogs: `run` · `grass` · `trail` · `beach` — cats: `walled` · `pocket` · `quiet` |
+| `leash` | dogs: `off` open ground · `area` designated zone · `hours` posted hours · `on` leashed |
+| `contain` | cats: `enclosed` · `bounded` · `open` — how hard it is to bolt |
 | `highlight` | the one concrete fact that changes your trip |
 | `src` / `url` | governing authority, and its rule page |
 
-Stars are **derived** from `leash` at render time — never stored per place, so
-they can't drift out of sync with the rule.
+Stars are **derived** at render time — from `leash` for dogs, `contain` for cats
+— never stored per place, so they can't drift out of sync with the rule.
+
+### Cats
+
+NYC Parks §1-04 names cats explicitly: licensed dogs *and cats* on a six-foot
+leash may be brought into a park. There is no such thing as a designated cat
+space, so `contain` is an assessment of how hard a spooked cat would find it to
+bolt — walls, gates, sightlines — not an official rating.
+
+Cat cards also show the distance to the nearest verified off-leash dog ground,
+computed from the dog dataset at render time. The dog list doubles as an inverse
+index: the best places for a dog are the worst for a cat.
 
 Rules change with the season, the hour and the posted sign. The footer says so,
 and every card links out for checking.
